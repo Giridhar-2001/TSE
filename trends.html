@@ -3,6 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
@@ -20,8 +21,7 @@
         }
 
         .controls-container select,
-        .controls-container input,
-        .controls-container button {
+        .controls-container input {
             padding: 10px;
             font-size: 16px;
             margin: 5px;
@@ -124,16 +124,7 @@
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
-                    x: {
-                        type: 'time',
-                        time: {
-                            unit: 'second',
-                            stepSize: 5,
-                            tooltipFormat: 'HH:mm:ss',
-                            displayFormats: { second: 'HH:mm:ss' }
-                        },
-                        ticks: { maxTicksLimit: 12 }
-                    },
+                    x: { type: 'time', time: { unit: 'second', stepSize: 5 }, ticks: { maxTicksLimit: 10 } },
                     y: { beginAtZero: true }
                 },
                 plugins: {
@@ -153,7 +144,7 @@
                     const tooltipData = chart.data.datasets
                         .map(dataset => {
                             const point = dataset.data.find(p => Math.abs(p.x - xValue) < 500);
-                            return point ? ${dataset.label}: ${point.y.toFixed(2)} : null;
+                            return point ? `${dataset.label}: ${point.y.toFixed(2)}` : null;
                         })
                         .filter(entry => entry)
                         .join('<br>');
@@ -176,8 +167,8 @@
                         ctx.restore();
 
                         tooltip.innerHTML = tooltipData;
-                        tooltip.style.left = ${event.native.offsetX + 15}px;
-                        tooltip.style.top = ${event.native.offsetY + 15}px;
+                        tooltip.style.left = `${event.native.offsetX + 15}px`;
+                        tooltip.style.top = `${event.native.offsetY + 15}px`;
                         tooltip.style.display = 'block';
                     } else {
                         tooltip.style.display = 'none';
@@ -215,14 +206,14 @@
             if (department === 'all') {
                 Object.keys(departmentsNodeIds).forEach((dept, idx) => {
                     datasets.push(
-                        { label: ${dept} Temperature, data: historicalData[dept].temperature, borderColor: colors[idx % colors.length], tension: 0.4 },
-                        { label: ${dept} Humidity, data: historicalData[dept].humidity, borderColor: colors[(idx + 1) % colors.length], tension: 0.4, borderDash: [5, 5] }
+                        { label: `${dept} Temperature`, data: historicalData[dept].temperature, borderColor: colors[idx % colors.length], tension: 0.4 },
+                        { label: `${dept} Humidity`, data: historicalData[dept].humidity, borderColor: colors[(idx + 1) % colors.length], tension: 0.4, borderDash: [5, 5] }
                     );
                 });
             } else {
                 datasets.push(
-                    { label: ${department} Temperature, data: historicalData[department].temperature, borderColor: colors[0], tension: 0.4 },
-                    { label: ${department} Humidity, data: historicalData[department].humidity, borderColor: colors[1], tension: 0.4, borderDash: [5, 5] }
+                    { label: `${department} Temperature`, data: historicalData[department].temperature, borderColor: colors[0], tension: 0.4 },
+                    { label: `${department} Humidity`, data: historicalData[department].humidity, borderColor: colors[1], tension: 0.4, borderDash: [5, 5] }
                 );
             }
             chart.data.datasets = datasets;
@@ -230,12 +221,20 @@
         }
 
         function loadStoredGraph() {
-            const fromDate = new Date(document.getElementById('fromDate').value);
-            const toDate = new Date(document.getElementById('toDate').value);
+            const fromDateInput = document.getElementById('fromDate').value;
+            const toDateInput = document.getElementById('toDate').value;
             const department = document.getElementById('departmentSelect').value;
 
-            if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
-                alert('Please select valid dates.');
+            if (!fromDateInput || !toDateInput) {
+                alert('Please select both "From" and "To" dates.');
+                return;
+            }
+
+            const fromDate = new Date(fromDateInput);
+            const toDate = new Date(toDateInput);
+
+            if (fromDate > toDate) {
+                alert('"From" date cannot be after "To" date.');
                 return;
             }
 
@@ -243,16 +242,39 @@
             if (department === 'all') {
                 Object.keys(departmentsNodeIds).forEach((dept, idx) => {
                     datasets.push(
-                        { label: ${dept} Temperature, data: historicalData[dept].temperature.filter(d => d.x >= fromDate && d.x <= toDate), borderColor: colors[idx % colors.length], tension: 0.4 },
-                        { label: ${dept} Humidity, data: historicalData[dept].humidity.filter(d => d.x >= fromDate && d.x <= toDate), borderColor: colors[(idx + 1) % colors.length], tension: 0.4, borderDash: [5, 5] }
+                        {
+                            label: `${dept} Temperature`,
+                            data: historicalData[dept].temperature.filter(d => d.x >= fromDate && d.x <= toDate),
+                            borderColor: colors[idx % colors.length],
+                            tension: 0.4
+                        },
+                        {
+                            label: `${dept} Humidity`,
+                            data: historicalData[dept].humidity.filter(d => d.x >= fromDate && d.x <= toDate),
+                            borderColor: colors[(idx + 1) % colors.length],
+                            tension: 0.4,
+                            borderDash: [5, 5]
+                        }
                     );
                 });
             } else {
                 datasets.push(
-                    { label: ${department} Temperature, data: historicalData[department].temperature.filter(d => d.x >= fromDate && d.x <= toDate), borderColor: colors[0], tension: 0.4 },
-                    { label: ${department} Humidity, data: historicalData[department].humidity.filter(d => d.x >= fromDate && d.x <= toDate), borderColor: colors[1], tension: 0.4, borderDash: [5, 5] }
+                    {
+                        label: `${department} Temperature`,
+                        data: historicalData[department].temperature.filter(d => d.x >= fromDate && d.x <= toDate),
+                        borderColor: colors[0],
+                        tension: 0.4
+                    },
+                    {
+                        label: `${department} Humidity`,
+                        data: historicalData[department].humidity.filter(d => d.x >= fromDate && d.x <= toDate),
+                        borderColor: colors[1],
+                        tension: 0.4,
+                        borderDash: [5, 5]
+                    }
                 );
             }
+
             chart.data.datasets = datasets;
             chart.update();
         }
@@ -266,4 +288,3 @@
 </body>
 
 </html>
-
