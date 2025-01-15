@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f8ff;
+        }
+
+        .chart-container {
+            width: 95%;
+            margin: 20px auto;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            height: 500px;
+        }
+
+        .dropdown-container {
+            text-align: center;
+            margin: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .dropdown-container select,
+        .dropdown-container input,
+        .dropdown-container button {
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        .dropdown-container button {
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+
+        .dropdown-container button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="dropdown-container">
+        <label for="departmentSelect">Select Department:</label>
+        <select id="departmentSelect" onchange="updateGraph()">
+            <option value="Preparatory 1">Preparatory 1</option>
+            <option value="Preparatory 2">Preparatory 2</option>
+            <option value="Spinning 1">Spinning 1</option>
+            <option value="Spinning 2">Spinning 2</option>
+            <option value="Link Coner">Link Coner</option>
+        </select>
+
+        <label for="fromDate">From:</label>
+        <input type="date" id="fromDate">
+
+        <label for="toDate">To:</label>
+        <input type="date" id="toDate">
+
+        <button onclick="submitDateRange()">Submit</button>
+
+        <label for="timePeriodSelect">Select Time Period:</label>
+        <select id="timePeriodSelect" onchange="updateTimePeriodGraph()">
+            <option value="0">Real-Time</option>
+            <option value="10">Last 10 Min</option>
+            <option value="15">Last 15 Min</option>
+            <option value="30">Last 30 Min</option>
+        </select>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="trendsChart"></canvas>
+    </div>
+
+    <script>
+        const departmentsNodeIds = {
+            'Preparatory 1': { temperature: "Preparatory 1_Temp", humidity: "Preparatory 1_RH" },
+            'Preparatory 2': { temperature: "Preparatory 2_Temp", humidity: "Preparatory 2_RH" },
+            'Spinning 1': { temperature: "Spinning 1_Temp", humidity: "Spinning 1_RH" },
+            'Spinning 2': { temperature: "Spinning 2_Temp", humidity: "Spinning 2_RH" },
+            'Link Coner': { temperature: "Linkconer_Temp", humidity: "Linkconer_RH" }
+        };
+
+        const colors = ['rgba(255, 99, 132, 1)', 'rgba(54, 162, 235, 1)'];
+
+        const ctx = document.getElementById('trendsChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: []
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: { unit: 'minute' },
+                        ticks: { maxTicksLimit: 10 }
+                    },
+                    y: { beginAtZero: true }
+                },
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+
+        const socket = io.connect('http://127.0.0.1:7005');
+
+        // Function to update the graph for selected department
+        function updateGraph() {
+            // Get the department selected
+            const department = document.getElementById('departmentSelect').value;
+
+            // Update the graph based on the selected department
+            const timePeriod = document.getElementById('timePeriodSelect').value;
+
+            if (timePeriod === "0") {
+                updateRealTimeGraph();
+            } else {
+                updateTimePeriodGraph();
+            }
+        }
+
+        // Function to update the graph for real-time data
+        function updateRealTimeGraph() {
+            const department = document.getElementById('departmentSelect').value;
+            const nodeIds = departmentsNodeIds[department];
+
+            chart.data.datasets = [];
+            chart.data.labels = [];
+
+            const temperatureDataset = {
+                label: `${department} Temperature (Real-Time)`,
+                data: [],
+                borderColor: colors[0],
+                tension: 0.4
+            };
+
+            const humidityDataset = {
+                label: `${department} Humidity (Real-Time)`,
+                data: [],
+                borderColor: colors[1],
+                tension: 0.4
+            };
+
+            chart.data.datasets.push(temperatureDataset, humidityDataset);
+
+            socket.on('update', function (data) {
+                const temp = data[nodeIds.temperature];
+                const hum = data[nodeIds.humidity];
+                const timestamp = new Date();
+
+                temperatureDataset.data.push({ x: timestamp, y: temp });
+                humidityDataset.data.push({ x: timestamp, y: hum });
+
+                if (temperatureDataset.data.length > 100) temperatureDataset.data.shift();
+                if (humidityDataset.data.length > 100) humidityDataset.data.shift();
+
+                chart.update();
+            });
+        }
+
+        // Function to update the graph for a time period (e.g., Last 10 minutes)
+        function updateTimePeriodGraph() {
+            const department = document.getElementById('departmentSelect').value;
+            const timePeriod = document.getElementById('timePeriodSelect').value;
+
+            if (timePeriod === "0") {
+                updateRealTimeGraph();
+                return;
+            }
+
+            const nodeIds = departmentsNodeIds[department];
+            const now = new Date();
+            const fromTime = new Date(now - timePeriod * 60000);
+
+            chart.data.datasets = [];
+            chart.data.labels = [];
+
+            const temperatureDataset = {
+                label: `${department} Temperature (Last ${timePeriod} Min)`,
+                data: [],
+                borderColor: colors[0],
+                tension: 0.4
+            };
+
+            const humidityDataset = {
+                label: `${department} Humidity (Last ${timePeriod} Min)`,
+                data: [],
+                borderColor: colors[1],
+                tension: 0.4
+            };
+
+            chart.data.datasets.push(temperatureDataset, humidityDataset);
+
+            socket.emit('getTimePeriodData', { nodeIds, fromTime, toTime: now }, (data) => {
+                data.forEach(item => {
+                    const timestamp = new Date(item.timestamp);
+                    temperatureDataset.data.push({ x: timestamp, y: item.temperature });
+                    humidityDataset.data.push({ x: timestamp, y: item.humidity });
+                });
+                chart.update();
+            });
+        }
+
+        // Function to update the graph for a custom date range
+        function submitDateRange() {
+            const fromDate = document.getElementById('fromDate').value;
+            const toDate = document.getElementById('toDate').value;
+
+            if (!fromDate || !toDate) {
+                alert('Please select both From and To dates.');
+                return;
+            }
+
+            const department = document.getElementById('departmentSelect').value;
+            const nodeIds = departmentsNodeIds[department];
+
+            const fromTime = new Date(fromDate);
+            const toTime = new Date(toDate);
+
+            chart.data.datasets = [];
+            chart.data.labels = [];
+
+            const temperatureDataset = {
+                label: `${department} Temperature (From ${fromDate} To ${toDate})`,
+                data: [],
+                borderColor: colors[0],
+                tension: 0.4
+            };
+
+            const humidityDataset = {
+                label: `${department} Humidity (From ${fromDate} To ${toDate})`,
+                data: [],
+                borderColor: colors[1],
+                tension: 0.4
+            };
+
+            chart.data.datasets.push(temperatureDataset, humidityDataset);
+
+            socket.emit('getDateRangeData', { nodeIds, fromTime, toTime }, (data) => {
+                data.forEach(item => {
+                    const timestamp = new Date(item.timestamp);
+                    temperatureDataset.data.push({ x: timestamp, y: item.temperature });
+                    humidityDataset.data.push({ x: timestamp, y: item.humidity });
+                });
+                chart.update();
+            });
+        }
+
+        // On page load, display all department graphs
+        window.onload = function() {
+            document.getElementById('departmentSelect').value = 'Preparatory 1';  // Default department
+            updateGraph();  // Update graph to show the default department graph
+        };
+    </script>
+
+</body>
+
+</html>
