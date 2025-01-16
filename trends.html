@@ -3,8 +3,8 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TSE Control System</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0"></script>
@@ -13,30 +13,36 @@
         body {
             font-family: Arial, sans-serif;
             background-color: #f0f8ff;
+            margin: 0;
+            padding: 0;
         }
 
         .controls-container {
-            text-align: center;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
             margin: 20px;
         }
 
         .controls-container select,
-        .controls-container input {
+        .controls-container input,
+        .controls-container button {
             padding: 10px;
             font-size: 16px;
-            margin: 5px;
             border: 1px solid #ccc;
             border-radius: 5px;
         }
 
         .chart-container {
-            width: 95%;
+            width: 85%;
+            height: 500px;
             margin: 20px auto;
             background-color: white;
             border-radius: 10px;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-            padding: 20px;
-            height: 500px;
+            padding: 10px;
             position: relative;
         }
 
@@ -57,10 +63,9 @@
 </head>
 
 <body>
-
     <div class="controls-container">
-        <label for="departmentSelect">Select Department:</label>
-        <select id="departmentSelect" onchange="updateGraph()">
+        <label for="departmentSelect">Department:</label>
+        <select id="departmentSelect" onchange="updateRealTimeGraph()">
             <option value="all">All Departments</option>
             <option value="Preparatory 1">Preparatory 1</option>
             <option value="Preparatory 2">Preparatory 2</option>
@@ -69,8 +74,8 @@
             <option value="Link Coner">Link Coner</option>
         </select>
 
-        <label for="timeRangeSelect">Select Time Range:</label>
-        <select id="timeRangeSelect" onchange="updateGraph()">
+        <label for="timeRangeSelect">Time Range:</label>
+        <select id="timeRangeSelect" onchange="updateRealTimeGraph()">
             <option value="10">Last 10 Minutes</option>
             <option value="15">Last 15 Minutes</option>
             <option value="30">Last 30 Minutes</option>
@@ -81,7 +86,7 @@
         <input type="date" id="fromDate">
         <label for="toDate">To:</label>
         <input type="date" id="toDate">
-        <button onclick="loadStoredGraph()">Show Graph</button>
+        <button onclick="loadDateRangeGraph()">Show Graph</button>
     </div>
 
     <div class="chart-container">
@@ -111,39 +116,35 @@
             historicalData[department] = { temperature: [], humidity: [] };
         });
 
+        let realTimeEnabled = true;
+
         const ctx = document.getElementById('trendsChart').getContext('2d');
         const hoverTooltip = document.getElementById('hoverTooltip');
 
         const chart = new Chart(ctx, {
             type: 'line',
-            data: {
-                labels: [],
-                datasets: []
-            },
+            data: { datasets: [] },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
-                    x: { type: 'time', time: { unit: 'second', stepSize: 5 }, ticks: { maxTicksLimit: 10 } },
+                    x: { type: 'time', time: { unit: 'minute' } },
                     y: { beginAtZero: true }
                 },
-                plugins: {
-                    legend: { position: 'bottom' }
-                },
+                plugins: { legend: { position: 'bottom' } },
                 events: ['mousemove'],
-                onHover(event, elements) {
-                    const tooltip = hoverTooltip;
+                onHover(event) {
                     const xPos = event.native.offsetX;
                     const xValue = chart.scales.x.getValueForPixel(xPos);
 
                     if (!xValue) {
-                        tooltip.style.display = 'none';
+                        hoverTooltip.style.display = 'none';
                         return;
                     }
 
                     const tooltipData = chart.data.datasets
                         .map(dataset => {
-                            const point = dataset.data.find(p => Math.abs(p.x - xValue) < 500);
+                            const point = dataset.data.find(p => Math.abs(new Date(p.x) - xValue) < 500);
                             return point ? `${dataset.label}: ${point.y.toFixed(2)}` : null;
                         })
                         .filter(entry => entry)
@@ -166,12 +167,12 @@
                         ctx.stroke();
                         ctx.restore();
 
-                        tooltip.innerHTML = tooltipData;
-                        tooltip.style.left = `${event.native.offsetX + 15}px`;
-                        tooltip.style.top = `${event.native.offsetY + 15}px`;
-                        tooltip.style.display = 'block';
+                        hoverTooltip.innerHTML = tooltipData;
+                        hoverTooltip.style.left = `${event.native.offsetX + 15}px`;
+                        hoverTooltip.style.top = `${event.native.offsetY + 15}px`;
+                        hoverTooltip.style.display = 'block';
                     } else {
-                        tooltip.style.display = 'none';
+                        hoverTooltip.style.display = 'none';
                     }
                 },
                 onLeave() {
@@ -183,6 +184,8 @@
 
         const socket = io.connect('http://127.0.0.1:7005');
         socket.on('update', data => {
+            if (!realTimeEnabled) return;
+
             const timestamp = new Date();
             Object.keys(departmentsNodeIds).forEach(department => {
                 const temp = data[departmentsNodeIds[department].temperature];
@@ -197,10 +200,14 @@
                     historicalData[department].humidity = historicalData[department].humidity.filter(d => d.x >= cutoffTime);
                 }
             });
-            if (document.getElementById('timeRangeSelect').value === 'real-time') updateGraph();
+
+            if (document.getElementById('timeRangeSelect').value === 'real-time') {
+                updateRealTimeGraph();
+            }
         });
 
-        function updateGraph() {
+        function updateRealTimeGraph() {
+            realTimeEnabled = true;
             const department = document.getElementById('departmentSelect').value;
             const datasets = [];
             if (department === 'all') {
@@ -220,87 +227,75 @@
             chart.update();
         }
 
-        function loadStoredGraph() {
-            const fromDateInput = document.getElementById('fromDate').value;
-            const toDateInput = document.getElementById('toDate').value;
-            const department = document.getElementById('departmentSelect').value;
+        function loadDateRangeGraph() {
+            realTimeEnabled = false;
 
-            if (!fromDateInput || !toDateInput) {
-                alert('Please select both "From" and "To" dates.');
+            const department = document.getElementById('departmentSelect').value;
+            const fromDate = new Date(document.getElementById('fromDate').value);
+            const toDate = new Date(document.getElementById('toDate').value);
+            const today = new Date();
+
+            if (!fromDate || !toDate || isNaN(fromDate) || isNaN(toDate)) {
+                alert('Please select a valid date range.');
                 return;
             }
-
-            const fromDate = new Date(fromDateInput);
-            const toDate = new Date(toDateInput);
 
             if (fromDate > toDate) {
-                alert('"From" date cannot be after "To" date.');
+                alert('From date cannot be after To date.');
                 return;
             }
 
-            const datasets = [];
-            if (department === 'all') {
-                Object.keys(departmentsNodeIds).forEach((dept, idx) => {
-                    const filteredTempData = historicalData[dept].temperature.filter(d => d.x >= fromDate && d.x <= toDate);
-                    const filteredHumData = historicalData[dept].humidity.filter(d => d.x >= fromDate && d.x <= toDate);
-
-                    if (filteredTempData.length > 0 || filteredHumData.length > 0) {
-                        datasets.push(
-                            {
-                                label: `${dept} Temperature`,
-                                data: filteredTempData,
-                                borderColor: colors[idx % colors.length],
-                                tension: 0.4
-                            },
-                            {
-                                label: `${dept} Humidity`,
-                                data: filteredHumData,
-                                borderColor: colors[(idx + 1) % colors.length],
-                                tension: 0.4,
-                                borderDash: [5, 5]
-                            }
-                        );
-                    }
-                });
-            } else {
-                const filteredTempData = historicalData[department].temperature.filter(d => d.x >= fromDate && d.x <= toDate);
-                const filteredHumData = historicalData[department].humidity.filter(d => d.x >= fromDate && d.x <= toDate);
-
-                if (filteredTempData.length > 0 || filteredHumData.length > 0) {
-                    datasets.push(
-                        {
-                            label: `${department} Temperature`,
-                            data: filteredTempData,
-                            borderColor: colors[0],
-                            tension: 0.4
-                        },
-                        {
-                            label: `${department} Humidity`,
-                            data: filteredHumData,
-                            borderColor: colors[1],
-                            tension: 0.4,
-                            borderDash: [5, 5]
-                        }
-                    );
-                }
+            if (fromDate > today || toDate > today) {
+                alert('Future dates are not allowed.');
+                return;
             }
 
-            if (datasets.length === 0) {
-                alert('No data found for the selected date range.');
+            const mockData = generateMockData(fromDate, toDate);
+            const datasets = [];
+
+            if (department === 'all') {
+                Object.keys(mockData).forEach((dept, index) => {
+                    datasets.push(
+                        { label: `${dept} Temperature`, data: mockData[dept].temperature, borderColor: colors[index % colors.length], tension: 0.4 },
+                        { label: `${dept} Humidity`, data: mockData[dept].humidity, borderColor: colors[(index + 1) % colors.length], tension: 0.4, borderDash: [5, 5] }
+                    );
+                });
+            } else {
+                datasets.push(
+                    { label: `${department} Temperature`, data: mockData[department].temperature, borderColor: colors[0], tension: 0.4 },
+                    { label: `${department} Humidity`, data: mockData[department].humidity, borderColor: colors[1], tension: 0.4, borderDash: [5, 5] }
+                );
             }
 
             chart.data.datasets = datasets;
             chart.update();
         }
 
+        function generateMockData(startDate, endDate) {
+            const data = {};
+            const departments = ['Preparatory 1', 'Preparatory 2', 'Spinning 1', 'Spinning 2', 'Link Coner'];
+            departments.forEach(department => {
+                data[department] = { temperature: [], humidity: [] };
+            });
+
+            let currentDate = new Date(startDate);
+            while (currentDate <= endDate) {
+                departments.forEach(department => {
+                    const temp = (Math.random() * 10 + 20).toFixed(1);
+                    const hum = (Math.random() * 10 + 60).toFixed(1);
+                    data[department].temperature.push({ x: new Date(currentDate), y: parseFloat(temp) });
+                    data[department].humidity.push({ x: new Date(currentDate), y: parseFloat(hum) });
+                });
+                currentDate.setHours(currentDate.getHours() + 1);
+            }
+            return data;
+        }
+
         window.onload = () => {
             document.getElementById('timeRangeSelect').value = 'real-time';
-            updateGraph();
+            updateRealTimeGraph();
         };
     </script>
-
 </body>
 
 </html>
-
-
