@@ -241,38 +241,52 @@
             const datasets = [];
             if (department === 'all') {
                 Object.keys(departmentsNodeIds).forEach((dept, idx) => {
+                    const filteredTempData = historicalData[dept].temperature.filter(d => d.x >= fromDate && d.x <= toDate);
+                    const filteredHumData = historicalData[dept].humidity.filter(d => d.x >= fromDate && d.x <= toDate);
+
+                    if (filteredTempData.length > 0 || filteredHumData.length > 0) {
+                        datasets.push(
+                            {
+                                label: `${dept} Temperature`,
+                                data: filteredTempData,
+                                borderColor: colors[idx % colors.length],
+                                tension: 0.4
+                            },
+                            {
+                                label: `${dept} Humidity`,
+                                data: filteredHumData,
+                                borderColor: colors[(idx + 1) % colors.length],
+                                tension: 0.4,
+                                borderDash: [5, 5]
+                            }
+                        );
+                    }
+                });
+            } else {
+                const filteredTempData = historicalData[department].temperature.filter(d => d.x >= fromDate && d.x <= toDate);
+                const filteredHumData = historicalData[department].humidity.filter(d => d.x >= fromDate && d.x <= toDate);
+
+                if (filteredTempData.length > 0 || filteredHumData.length > 0) {
                     datasets.push(
                         {
-                            label: `${dept} Temperature`,
-                            data: historicalData[dept].temperature.filter(d => d.x >= fromDate && d.x <= toDate),
-                            borderColor: colors[idx % colors.length],
+                            label: `${department} Temperature`,
+                            data: filteredTempData,
+                            borderColor: colors[0],
                             tension: 0.4
                         },
                         {
-                            label: `${dept} Humidity`,
-                            data: historicalData[dept].humidity.filter(d => d.x >= fromDate && d.x <= toDate),
-                            borderColor: colors[(idx + 1) % colors.length],
+                            label: `${department} Humidity`,
+                            data: filteredHumData,
+                            borderColor: colors[1],
                             tension: 0.4,
                             borderDash: [5, 5]
                         }
                     );
-                });
-            } else {
-                datasets.push(
-                    {
-                        label: `${department} Temperature`,
-                        data: historicalData[department].temperature.filter(d => d.x >= fromDate && d.x <= toDate),
-                        borderColor: colors[0],
-                        tension: 0.4
-                    },
-                    {
-                        label: `${department} Humidity`,
-                        data: historicalData[department].humidity.filter(d => d.x >= fromDate && d.x <= toDate),
-                        borderColor: colors[1],
-                        tension: 0.4,
-                        borderDash: [5, 5]
-                    }
-                );
+                }
+            }
+
+            if (datasets.length === 0) {
+                alert('No data found for the selected date range.');
             }
 
             chart.data.datasets = datasets;
@@ -288,4 +302,5 @@
 </body>
 
 </html>
+
 
