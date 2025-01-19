@@ -130,10 +130,10 @@
                     x: {
                         type: 'time',
                         time: {
-                            unit: 'minute',
-                            tooltipFormat: 'MMM D, h:mm a',
+                            unit: 'second',
+                            tooltipFormat: 'MMM D, h:mm:ss a',
                             displayFormats: {
-                                minute: 'h:mm a'
+                                second: 'h:mm:ss a'
                             }
                         },
                         title: { display: true, text: 'Time' }
@@ -268,8 +268,7 @@
             isDateRangeMode = true;
             resetChart();
 
-            const records = generateMockData(fromDateTime, toDateTime);
-            updateHistoricalGraph(records);
+            loadHistoricalData(fromDateTime, toDateTime);
         }
 
         function loadHistoricalData(fromDateTime, toDateTime) {
@@ -332,3 +331,4 @@
 </body>
 
 </html>
+
