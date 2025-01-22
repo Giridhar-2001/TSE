@@ -88,11 +88,11 @@
         </select>
 
         <label for="fromDate">From Date:</label>
-        <input type="date" id="fromDate" onchange="validateDateInputs()">
+        <input type="date" id="fromDate" onchange="setDefaultFromTime()">
         <input type="time" id="fromTime">
 
         <label for="toDate">To Date:</label>
-        <input type="date" id="toDate" onchange="validateDateInputs()">
+        <input type="date" id="toDate" onchange="setDefaultToTime()">
         <input type="time" id="toTime">
 
         <button onclick="loadDateRangeGraph()">Show Graph</button>
@@ -130,10 +130,10 @@
                     x: {
                         type: 'time',
                         time: {
-                            unit: 'second',
-                            tooltipFormat: 'MMM D, h:mm:ss a',
+                            unit: 'minute',
+                            tooltipFormat: 'MMM D, h:mm a',
                             displayFormats: {
-                                second: 'h:mm:ss a'
+                                minute: 'h:mm a'
                             }
                         },
                         title: { display: true, text: 'Time' }
@@ -162,10 +162,12 @@
         let selectedDepartment = "all";
         let isRealTime = true;
         let isDateRangeMode = false;
+        let receivedData = false;
 
         const socket = io('http://127.0.0.1:7005'); // Replace with your server's address.
 
         socket.on('update', function (data) {
+            receivedData = true;
             if (isRealTime) {
                 updateRealTimeGraph(data);
             }
@@ -185,6 +187,14 @@
                 toDate.value = now;
                 alert("Future dates are not allowed for To Date.");
             }
+        }
+
+        function setDefaultFromTime() {
+            document.getElementById('fromTime').value = "00:00";
+        }
+
+        function setDefaultToTime() {
+            document.getElementById('toTime').value = "23:59";
         }
 
         function handleDepartmentSelection() {
@@ -216,7 +226,8 @@
         }
 
         function updateRealTimeGraph(data) {
-            if (isDateRangeMode) return;
+            if (isDateRangeMode || !receivedData) return;
+
             const departmentsToShow = selectedDepartment === "all" ? Object.keys(departmentsNodeIds) : [selectedDepartment];
             departmentsToShow.forEach((department, idx) => {
                 const nodeIds = departmentsNodeIds[department];
@@ -224,8 +235,10 @@
                 const humidity = data[nodeIds.humidity];
                 const timestamp = new Date();
 
-                updateDataset(department, `${department} Temperature`, timestamp, temperature, colors[idx]);
-                updateDataset(department, `${department} Humidity`, timestamp, humidity, colors[(idx + 1) % colors.length], [5, 5]);
+                if (temperature !== undefined && humidity !== undefined) {
+                    updateDataset(department, `${department} Temperature`, timestamp, temperature, colors[idx]);
+                    updateDataset(department, `${department} Humidity`, timestamp, humidity, colors[(idx + 1) % colors.length], [5, 5]);
+                }
             });
             chart.update();
         }
@@ -268,7 +281,8 @@
             isDateRangeMode = true;
             resetChart();
 
-            loadHistoricalData(fromDateTime, toDateTime);
+            const records = generateMockData(fromDateTime, toDateTime);
+            updateHistoricalGraph(records);
         }
 
         function loadHistoricalData(fromDateTime, toDateTime) {
@@ -331,4 +345,5 @@
 </body>
 
 </html>
+
 
